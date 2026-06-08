@@ -5,6 +5,7 @@ import { type BorrowFormData } from '../components/BorrowFormModal';
  * ============================================================
  * UTM FKE Lab Inventory — Global Application State
  * Strict 3-Stage Lifecycle Pipeline Model with Conflict Resolution
+ * Cross-Device LocalStorage Real-Time Synchronization Layer
  * ============================================================
  */
 
@@ -229,6 +230,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : initialInventory;
   });
 
+  // --- CROSS-DEVICE REAL-TIME SYNCHRONIZATION SYNC ENGINE ---
+  useEffect(() => {
+    const handleStorageUpdate = (e: StorageEvent) => {
+      if (!e.newValue) return;
+      try {
+        if (e.key === 'utm_equipment_rows') setEquipmentRows(JSON.parse(e.newValue));
+        if (e.key === 'utm_application_queue') setApplicationQueue(JSON.parse(e.newValue));
+        if (e.key === 'utm_blacklisted_emails') setBlacklistedEmails(JSON.parse(e.newValue));
+        if (e.key === 'utm_transaction_history') setTransactionHistory(JSON.parse(e.newValue));
+        if (e.key === 'utm_component_inventory') setComponentInventory(JSON.parse(e.newValue));
+      } catch (err) {
+        console.error("State Sync Core Failure", err);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageUpdate);
+    return () => window.removeEventListener('storage', handleStorageUpdate);
+  }, []);
+
+  // Update localStorage when local mutations happen
   useEffect(() => {
     localStorage.setItem('utm_equipment_rows', JSON.stringify(equipmentRows));
   }, [equipmentRows]);
@@ -312,106 +333,95 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [blacklistedEmails, applicationQueue]);
 
   // ===================================================================
-  // ENHANCED DISPATCHER: AUTOMATIC CODE REALLOCATION LOGIC ENGINE
+  // FULLY FIXED AUTO-REGULATION AND REDIRECT WORKFLOW ENGINE
   // ===================================================================
   const approveApplication = useCallback((appId: string) => {
-    setApplicationQueue((prevQueue) => {
-      // 1. Locate the selected target application
-      const targetApp = prevQueue.find((a) => a.id === appId);
-      if (!targetApp) return prevQueue;
+    const timestampNow = new Date().toISOString();
 
-      const baseRequestedCode = targetApp.equipmentCode;
-      const timestampNow = new Date().toISOString();
+    // We calculate all state changes synchronized against the exact same data frame
+    setEquipmentRows((currentRows) => {
+      // Create a mutable snapshot copy of our rows to calculate sequential inventory updates
+      let workingEquipmentRows = [...currentRows];
 
-      // 2. Identify remaining concurrent pending requests for the exact same initial code
-      const conflictingApps = prevQueue.filter(
-        (a) => a.id !== appId && a.equipmentCode === baseRequestedCode && a.stage === 'PENDING'
-      );
+      setApplicationQueue((prevQueue) => {
+        // Step 1: Locate the specific targeted upper request ticket
+        const targetApp = prevQueue.find((a) => a.id === appId);
+        if (!targetApp) return prevQueue;
 
-      let totalNewApprovalsCount = 1; // Includes target app
+        const baseRequestedCode = targetApp.equipmentCode;
 
-      setEquipmentRows((currentRows) => {
-        // Collect a list of alternative available units
-        const freeAlternativeRows = currentRows.filter(
-          (row) => row.status === 'AVAILABLE' && row.code !== baseRequestedCode
+        // Mark the primary equipment row matching this initial code as BORROWED
+        workingEquipmentRows = workingEquipmentRows.map((row) =>
+          row.code === baseRequestedCode ? { ...row, status: 'BORROWED' as const, verificationBy: 'STAFF VERIFIED' } : row
         );
 
-        // Map updates across physical row assets
-        let alternativesAssignedCounter = 0;
-        return currentRows.map((row) => {
-          // Rule A: Approve the first targeted row matching the item code directly
-          if (row.code === baseRequestedCode) {
-            return { ...row, status: 'BORROWED' as EquipmentStatus };
+        // Step 2 & 3: Filter out concurrent requests waiting for the exact same initial code
+        // Sorting by submission date ensures we approve the oldest/top-most items first sequentially
+        const conflictingAppsInQueue = prevQueue
+          .filter((a) => a.id !== appId && a.equipmentCode === baseRequestedCode && a.stage === 'PENDING')
+          .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+
+        let totalNewApprovalsCount = 1; // Start with the primary approved student
+
+        // Map and transform the final applications array status fields
+        const updatedQueue = prevQueue.map((app) => {
+          // Process primary target row
+          if (app.id === appId) {
+            return {
+              ...app,
+              status: 'APPROVED' as AppStatus,
+              stage: 'ACTIVE_BORROW' as const,
+              isApproved: true,
+              approvedAt: timestampNow,
+              processedAt: timestampNow,
+            };
           }
-          
-          // Rule B: Sequentially consume available tracks for conflicting students
-          if (row.status === 'AVAILABLE' && row.code !== baseRequestedCode && alternativesAssignedCounter < conflictingApps.length) {
-            alternativesAssignedCounter++;
-            totalNewApprovalsCount++;
-            return { ...row, status: 'BORROWED' as EquipmentStatus };
+
+          // Step 4: System checks conflicting student requests and executes automatic redirects
+          if (app.equipmentCode === baseRequestedCode && app.stage === 'PENDING') {
+            // Find the next genuinely free alternative code in our updated inventory array row loop
+            const nextFreeDevice = workingEquipmentRows.find((row) => row.status === 'AVAILABLE');
+
+            if (nextFreeDevice) {
+              // Lock down this new sequential asset code immediately in our working tracking row copy
+              workingEquipmentRows = workingEquipmentRows.map((row) =>
+                row.code === nextFreeDevice.code ? { ...row, status: 'BORROWED' as const, verificationBy: 'SYSTEM AUTO-ROUTE' } : row
+              );
+              totalNewApprovalsCount++;
+
+              // Auto-redirect and approve this student to the alternative equipment code
+              return {
+                ...app,
+                equipmentCode: nextFreeDevice.code,
+                status: 'APPROVED' as AppStatus,
+                stage: 'ACTIVE_BORROW' as const,
+                isApproved: true,
+                approvedAt: timestampNow,
+                processedAt: timestampNow,
+              };
+            }
           }
-          
-          return row;
+
+          return app; // Unaltered non-conflicting applications pass through safely
         });
+
+        // Step 3: Automatically recalculate physical display inventory quantities cleanly
+        setComponentInventory((prevInv) =>
+          prevInv.map((item) =>
+            item.name === 'Digital Oscilloscope'
+              ? { 
+                  ...item, 
+                  unitsOut: item.unitsOut + totalNewApprovalsCount, 
+                  unitsOnShelf: Math.max(0, item.unitsOnShelf - totalNewApprovalsCount) 
+                }
+              : item
+          )
+        );
+
+        return updatedQueue;
       });
 
-      // 3. Scale up Digital Oscilloscope counts within component items catalog
-      setComponentInventory((prevInv) =>
-        prevInv.map((item) =>
-          item.name === 'Digital Oscilloscope'
-            ? { 
-                ...item, 
-                unitsOut: item.unitsOut + totalNewApprovalsCount, 
-                unitsOnShelf: Math.max(0, item.unitsOnShelf - totalNewApprovalsCount) 
-              }
-            : item
-        )
-      );
-
-      // 4. Transform application tickets array to active statuses
-      let altRowIndex = 0;
-      return prevQueue.map((a) => {
-        // Target student receives original selection
-        if (a.id === appId) {
-          return {
-            ...a,
-            status: 'APPROVED' as AppStatus,
-            stage: 'ACTIVE_BORROW' as const,
-            isApproved: true,
-            approvedAt: timestampNow,
-            processedAt: timestampNow,
-          };
-        }
-
-        // Remaining students get auto-regulated to discrete available equipment numbers
-        if (a.equipmentCode === baseRequestedCode && a.stage === 'PENDING') {
-          // Re-query current rows state to find which item code this index gets
-          const availableAlternatives = initialEquipment.filter(
-            (r) => r.code !== baseRequestedCode
-          ); // Fallback lookup array safe references
-          
-          // Run an explicit context evaluation step
-          const assignedCode = localStorage.getItem('utm_equipment_rows')
-            ? JSON.parse(localStorage.getItem('utm_equipment_rows') || '[]')
-                .filter((r: any) => r.status === 'AVAILABLE' && r.code !== baseRequestedCode)[altRowIndex]?.code
-            : null;
-
-          const absoluteCodeFallback = assignedCode || `ALT-${baseRequestedCode}-${altRowIndex + 1}`;
-          altRowIndex++;
-
-          return {
-            ...a,
-            equipmentCode: absoluteCodeFallback,
-            status: 'APPROVED' as AppStatus,
-            stage: 'ACTIVE_BORROW' as const,
-            isApproved: true,
-            approvedAt: timestampNow,
-            processedAt: timestampNow,
-          };
-        }
-
-        return a;
-      });
+      return workingEquipmentRows;
     });
   }, []);
 
