@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Clock, ShieldCheck, UserX, UserCheck, CheckCircle, FileText, Camera, UploadCloud, Ban, Undo2, Table, AlertTriangle, PackageCheck } from 'lucide-react';
 import { useAppState } from '../context';
 import type { UserRole } from '../auth';
@@ -39,6 +39,25 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
   const cleanUserEmail = currentUserEmail.trim().toLowerCase();
 
   // ==========================================
+  // REAL-TIME MULTI-WINDOW SUBSCRIPTION TICKER
+  // ==========================================
+  const [, forceUpdate] = useState({});
+  useEffect(() => {
+    const triggerSyncUpdate = () => forceUpdate({});
+    
+    // Connect listener to look for state flushes executed by alternate window roles
+    window.addEventListener('storage', triggerSyncUpdate);
+    
+    // Safety fallback interval loop to guarantee rapid reactive evaluations
+    const safetyPollingInterval = setInterval(triggerSyncUpdate, 500);
+    
+    return () => {
+      window.removeEventListener('storage', triggerSyncUpdate);
+      clearInterval(safetyPollingInterval);
+    };
+  }, []);
+
+  // ==========================================
   // ROLE-BASED DATA FILTERING PIPELINE
   // ==========================================
   const incomingVerificationQueue = useMemo(() => {
@@ -50,6 +69,9 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     if (isStaff) return rawLog;
     return rawLog.filter(app => app.formData.emailAddress.trim().toLowerCase() === cleanUserEmail);
   }, [rawLog, isStaff, cleanUserEmail]);
+
+  // Combined baseline evaluation array to make sure local spreadsheet hooks trace context changes correctly
+  const stateSyncDependencyHash = JSON.stringify([rawQueue, rawLog, rawLedger]);
 
   const historicalLedger = useMemo(() => {
     if (isStaff) return rawLedger;
@@ -125,7 +147,7 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     });
 
     return Object.values(stats);
-  }, [rawQueue, rawLog, rawLedger]);
+  }, [stateSyncDependencyHash]); // Re-computes whenever state storage ticks on any frame window
 
   // Baseline asset laboratory limits allocations
   const getAssetTotalCapacity = (code: string) => {
