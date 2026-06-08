@@ -47,7 +47,10 @@ export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentA
     }
   };
 
-  const agt567Status = equipmentRows.find((r) => r.code === 'AGT567')?.status ?? 'AVAILABLE';
+  // ADAPTIVE WORKFLOW: Fallback monitoring target selection logic
+  // Automatically tracks the current target if a modal is active, otherwise falls back to monitoring 'AGT567'
+  const currentMonitoringTarget = borrowTarget || 'AGT567';
+  const trackedTargetStatus = equipmentRows.find((r) => r.code === currentMonitoringTarget)?.status ?? 'AVAILABLE';
   const isStudent = userRole === 'student';
 
   if (borrowTarget && isStudent) {
@@ -64,9 +67,9 @@ export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentA
         <div className="w-72 flex-shrink-0">
           <div className="sticky top-20">
             <TinkerIoTSimulator
-              agt567Status={agt567Status}
-              onSimulateRemove={() => updateEquipmentStatus('AGT567', 'BORROWED')}
-              onSimulatePlace={() => updateEquipmentStatus('AGT567', 'AVAILABLE')}
+              agt567Status={trackedTargetStatus}
+              onSimulateRemove={() => updateEquipmentStatus(borrowTarget, 'BORROWED')}
+              onSimulatePlace={() => updateEquipmentStatus(borrowTarget, 'AVAILABLE')}
             />
           </div>
         </div>
@@ -180,13 +183,13 @@ export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentA
           </div>
         </div>
 
-        {/* TinkerIoT Simulator */}
+        {/* Dynamic TinkerIoT Simulator Panel */}
         <div className="w-full lg:w-72 flex-shrink-0">
           <div className="sticky top-20">
             <TinkerIoTSimulator
-              agt567Status={agt567Status}
-              onSimulateRemove={() => updateEquipmentStatus('AGT567', 'BORROWED')}
-              onSimulatePlace={() => updateEquipmentStatus('AGT567', 'AVAILABLE')}
+              agt567Status={trackedTargetStatus}
+              onSimulateRemove={() => updateEquipmentStatus(currentMonitoringTarget, 'BORROWED')}
+              onSimulatePlace={() => updateEquipmentStatus(currentMonitoringTarget, 'AVAILABLE')}
             />
           </div>
         </div>
