@@ -38,21 +38,20 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
   const isStaff = userRole === 'staff';
   const cleanUserEmail = currentUserEmail.trim().toLowerCase();
 
-  // Low-overhead synchronization listener to force-re-render simultaneous incoming items immediately
+  // Low-overhead synchronization listener ensuring all concurrent applications render safely instantly
   const [, forceSyncUpdate] = useState({});
   useEffect(() => {
     const handleRefresh = () => forceSyncUpdate({});
     window.addEventListener('storage', handleRefresh);
-    const syncInterval = setInterval(handleRefresh, 300);
+    const syncInterval = setInterval(handleRefresh, 400);
     return () => {
       window.removeEventListener('storage', handleRefresh);
       clearInterval(syncInterval);
     };
   }, []);
 
-  // FORCE ALL APPLICATIONS TO REMAIN LISTED SEPARATELY (Fixes Farhana disappearing)
   const incomingVerificationQueue = useMemo(() => {
-    if (isStaff) return [...rawQueue]; // Unconditional full shallow clone array listing everyone
+    if (isStaff) return rawQueue;
     return rawQueue.filter(app => app.formData.emailAddress.trim().toLowerCase() === cleanUserEmail);
   }, [rawQueue, isStaff, cleanUserEmail]);
 
@@ -67,14 +66,6 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
   }, [rawLedger, isStaff, cleanUserEmail]);
 
   const contextDataHash = JSON.stringify([rawQueue, rawLog, rawLedger]);
-
-  // Available equipment code generation dictionary for manual redirection paths
-  const allLabDeviceCodesList = useMemo(() => [
-    'AGT5701', 'AGT5702', 'AGT5703', 'AGT5704', 'AGT5705',
-    'MXW2101', 'MXW2102', 'MXW2103', 'MXW2104', 'MXW2105', 'MXW2106', 'MXW2107', 'MXW2108',
-    'RFE8801', 'RFE8802', 'RFE8803', 'RFE8804',
-    'MTP3401', 'MTP3402', 'MTP3403', 'MTP3404'
-  ], []);
 
   const inventorySpreadsheetData = useMemo(() => {
     const stats: Record<string, {
@@ -141,10 +132,48 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     return 4;
   };
 
-  const handleManualRedirect = (appId: string, newSelectedCode: string) => {
-    const targetApplication = rawQueue.find(app => app.id === appId);
-    if (targetApplication) {
-      targetApplication.equipmentCode = newSelectedCode;
+  // ===================================================================
+  // AUTOMATED CASCADE REDIRECT ROUTING LOGIC ENGINE
+  // ===================================================================
+  const handleStaffApproveWithRedirect = (targetAppId: string, currentCode: string) => {
+    // 1. Approve the upper target selection first
+    approveApplication(targetAppId);
+
+    // 2. Extract classification prefix type (e.g., AGT, MXW, RFE)
+    const prefix = currentCode.match(/^[A-Z]+/)?.[0] || '';
+    if (!prefix) return;
+
+    // 3. Find other conflicting unapproved applications requested for this exact same machine unit code
+    const secondaryRequests = rawQueue.filter(app => app.id !== targetAppId && app.equipmentCode === currentCode);
+    
+    if (secondaryRequests.length > 0) {
+      // Extract numeric suffix sequences to scan across alternative capacity thresholds
+      const currentNumericPart = parseInt(currentCode.replace(/^\D+/g, ''), 10) || 100;
+      
+      secondaryRequests.forEach((pendingApp, index) => {
+        let assignedAlternateCode = currentCode;
+        const totalCapLimit = getAssetTotalCapacity(currentCode);
+
+        // Dynamic sequence generation: try cascading to alternative available hardware units
+        for (let offset = 1; offset <= totalCapLimit; offset++) {
+          const alternativeNumericCandidate = currentNumericPart + offset;
+          const candidateCode = `${prefix}${alternativeNumericCandidate}`;
+
+          // Check if anyone else is actively holding or awaiting this specific candidate device code
+          const codeIsBusyInQueue = rawQueue.some(q => q.equipmentCode === candidateCode);
+          const codeIsBusyInPossession = rawLog.some(l => l.equipmentCode === candidateCode && !(l.isReturned && l.returnDetails));
+
+          if (!codeIsBusyInQueue && !codeIsBusyInPossession) {
+            assignedAlternateCode = candidateCode;
+            break; 
+          }
+        }
+
+        // Mutate the conflicting configuration path on the fly
+        if (assignedAlternateCode !== currentCode) {
+          pendingApp.equipmentCode = assignedAlternateCode;
+        }
+      });
       forceSyncUpdate({});
     }
   };
@@ -391,7 +420,7 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
         </div>
       )}
 
-      {/* STAGE 1 QUEUE - ALL SEPARATE SUBMISSIONS LISTED OUT TRANSPARENTLY */}
+      {/* STAGE 1 QUEUE WITH MULTI-STUDENT AUTO-REDIRECT SYSTEM */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
         <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2 bg-gray-50/50">
           <Clock className="w-4 h-4 text-utm-maroon" />
@@ -411,7 +440,7 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-gray-600 font-bold text-[11px]">
                   <th className="px-4 py-3">STUDENT DETAILS</th>
-                  <th className="px-4 py-3">EQUIPMENT ASSIGNMENT</th>
+                  <th className="px-4 py-3">EQUIPMENT CODE</th>
                   <th className="px-4 py-3">BORROW TIMING PARAMETERS</th>
                   <th className="px-4 py-3 text-center">RISK STATUS</th>
                   <th className="px-4 py-3 text-center">ACTIONS</th>
@@ -430,27 +459,8 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                         <div className="text-gray-500 font-mono text-[10px]">{details.emailAddress}</div>
                         <div className="text-gray-400 text-[10px]">{details.phoneNumber} • {details.yearCourse}</div>
                       </td>
-                      <td className="px-4 py-3 space-y-1.5">
-                        <div className="font-mono font-bold text-utm-maroon text-xs bg-maroon-50/50 inline-block px-1.5 py-0.5 rounded border border-gray-100">
-                          {app.equipmentCode}
-                        </div>
-                        {/* MANUAL REDIRECT ACTION DROPDOWN FOR LAB STAFF */}
-                        {isStaff && (
-                          <div className="space-y-0.5">
-                            <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-tight">Manual Reassignment:</label>
-                            <select
-                              value={app.equipmentCode}
-                              onChange={(e) => handleManualRedirect(app.id, e.target.value)}
-                              className="bg-slate-50 border border-slate-200 text-slate-700 rounded font-mono text-[10px] p-1 focus:outline-none focus:border-utm-maroon max-w-[150px]"
-                            >
-                              {allLabDeviceCodesList.map((codeCandidate) => (
-                                <option key={codeCandidate} value={codeCandidate}>
-                                  {codeCandidate}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
+                      <td className="px-4 py-3 font-mono font-bold text-utm-maroon text-xs">
+                        {app.equipmentCode}
                       </td>
                       <td className="px-4 py-3 space-y-0.5 text-gray-600">
                         <div>Date: <span className="font-medium text-gray-900">{details.dateBorrow}</span></div>
@@ -472,7 +482,7 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                         {isStaff ? (
                           <div className="flex items-center justify-center gap-2">
                             <button
-                              onClick={() => approveApplication(app.id)}
+                              onClick={() => handleStaffApproveWithRedirect(app.id, app.equipmentCode)}
                               disabled={isFlagged}
                               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold text-white shadow-sm transition-all ${
                                 isFlagged ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-700'
