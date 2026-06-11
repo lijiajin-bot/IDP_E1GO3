@@ -180,13 +180,13 @@ const initialEquipment: OscilloscopeRow[] = [
 
   { no: 3, code: 'AGT569', lastDateUsed: '2026-05-08', labLocation: 'P03 LEVEL 2', status: 'BORROWED', verificationBy: 'NORHAYATI IDRIS' },
 
-  { no: 4, code: 'AGT570', lastDateUsed: '2026-05-11', labLocation: 'P04 LEVEL 3', status: 'AVAILABLE', verificationBy: 'RAZALI AHMAD' },
+  { no: 4, code: 'AGT570', lastDateUsed: '2026-05-11', labLocation: 'P04 LEVEL 3', status: 'PENDING PICKUP', verificationBy: 'RAZALI AHMAD' },
 
-  { no: 5, code: 'AGT571', lastDateUsed: '2026-05-07', labLocation: 'P03 LEVEL 2', status: 'PENDING PICKUP', verificationBy: 'NORHAYATI IDRIS' },
+  { no: 5, code: 'AGT571', lastDateUsed: '2026-05-07', labLocation: 'P03 LEVEL 2', status: 'AVAILABLE', verificationBy: 'NORHAYATI IDRIS' },
 
   { no: 6, code: 'AGT572', lastDateUsed: '2026-05-06', labLocation: 'P05 LEVEL 1', status: 'AVAILABLE', verificationBy: 'KAMARUZAMAN YUSOF' },
 
-  { no: 7, code: 'AGT573', lastDateUsed: '2026-05-05', labLocation: 'P05 LEVEL 1', status: 'BORROWED', verificationBy: 'KAMARUZAMAN YUSOF' },
+  { no: 7, code: 'AGT573', lastDateUsed: '2026-05-05', labLocation: 'P05 LEVEL 1', status: 'RETURN_PENDING', verificationBy: 'KAMARUZAMAN YUSOF' },
 
   { no: 8, code: 'AGT574', lastDateUsed: '2026-05-12', labLocation: 'P04 LEVEL 3', status: 'AVAILABLE', verificationBy: 'RAZALI AHMAD' },
 
@@ -330,6 +330,64 @@ const initialApplicationQueue: Application[] = [
 
   },
 
+  // STAGE 1: Pending Return Request (return form submitted, awaiting staff verification)
+  {
+
+    id: 'APP-1704067200000-7654',
+
+    formData: {
+
+      fullName: 'FARHANA BINTI ZULKIFLI',
+
+      yearCourse: '4/SKELH',
+
+      duration: '1.5 hours',
+
+      returnTime: '15:30',
+
+      dateBorrow: '2026-06-01',
+
+      phoneNumber: '0195555555',
+
+      emailAddress: 'farhana@graduate.utm.my',
+
+    },
+
+    equipmentCode: 'AGT573',
+
+    submittedAt: '2026-06-01T11:00:00Z',
+
+    isBlacklisted: false,
+
+    status: 'PENDING',
+
+    stage: 'RETURN_PENDING',
+
+    isApproved: true,
+
+    isReturned: true,
+
+    isReturnVerified: false,
+
+    approvedAt: '2026-06-01T11:30:00Z',
+
+    returnSubmittedAt: '2026-06-03T14:20:00Z',
+
+    returnDetails: {
+
+      dateReturned: '2026-06-03',
+
+      overseeingStaff: 'RAZALI AHMAD',
+
+      equipmentImage: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+
+    },
+
+    processedAt: '2026-06-01T11:30:00Z',
+
+  },
+
+  // STAGE 3: Historical (completed transaction)
   {
 
     id: 'APP-1704067200000-9876',
@@ -428,9 +486,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [applicationQueue, setApplicationQueue] = useState<Application[]>(() => {
 
+    const savedVersion = localStorage.getItem('utm_data_version');
+    const currentVersion = '3-stage-v2';
+    if (savedVersion !== currentVersion) {
+      localStorage.removeItem('utm_application_queue');
+      localStorage.setItem('utm_data_version', currentVersion);
+    }
     const saved = localStorage.getItem('utm_application_queue');
 
-    return saved ? JSON.parse(saved) : initialApplicationQueue;
+    const parsed = saved ? JSON.parse(saved) : [];
+    return parsed.length > 0 ? parsed : initialApplicationQueue;
 
   });
 
@@ -752,6 +817,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
               isReturned: true,
 
+              stage: 'RETURN_PENDING' as const,
+
               returnDetails,
 
               returnSubmittedAt: new Date().toISOString(),
@@ -884,12 +951,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Pure 3-Stage Pipeline Selectors
 
-  const incomingVerificationQueue = useMemo(() => 
-
-    applicationQueue.filter((app) => app.stage === 'PENDING'),
-
+  const incomingVerificationQueue = useMemo(() =>
+    applicationQueue.filter((app) => app.stage === 'PENDING' || app.stage === 'RETURN_PENDING'),
     [applicationQueue]
-
   );
 
 

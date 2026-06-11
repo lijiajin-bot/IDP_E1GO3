@@ -28,9 +28,10 @@ const statusDot: Record<EquipmentStatus | 'BROKEN' | 'CALIBRATING', string> = {
 interface EquipmentAvailabilityProps {
   userRole: UserRole;
   currentUserEmail: string;
+  onSuccessRedirect?: () => void;
 }
 
-export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentAvailabilityProps) {
+export function EquipmentAvailability({ userRole, currentUserEmail, onSuccessRedirect }: EquipmentAvailabilityProps) {
   const { 
     equipmentRows, 
     updateEquipmentStatus, 
@@ -50,6 +51,7 @@ export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentA
     if (borrowTarget) {
       submitApplication(data, borrowTarget, photoBase64);
       setBorrowTarget(null);
+      onSuccessRedirect?.();
     }
   };
 
