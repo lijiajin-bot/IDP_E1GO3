@@ -22,11 +22,11 @@ export const ALLOWED_USERS: Record<string, { name: string; role: UserRole; passw
 
   // === STUDENTS REGISTERED (6 Accounts) ===
 
-  'naqiyah@graduate.utm.my': { name: 'NAQIYAH BINTI AHMAD', role: 'student', password: 'stud_naqiyah2026', course: '3/SKELH' },
+  'tanzhelam@graduate.utm.my': { name: 'TAN ZHE LAM', role: 'student', password: 'ZZ', course: '3/SKELH' },
 
-  'amirul@graduate.utm.my': { name: 'AMIRUL BIN MOHD', role: 'student', password: 'stud_amirul2026', course: '2/SKEEH' },
+  'yongshun@graduate.utm.my': { name: 'YONG QIAN SHUN', role: 'student', password: 'qq', course: '3/SKEEH' },
 
-  'farhana@graduate.utm.my': { name: 'FARHANA BINTI ZULKIFLI', role: 'student', password: 'stud_farhana2026', course: '4/SKELH' },
+  'lijiajin@graduate.utm.my': { name: 'LI JIA JIN', role: 'student', password: 'jj', course: '3/SKELH' },
 
   'syahmi@graduate.utm.my': { name: 'MUHAMMAD SYAHMI BIN ALI', role: 'student', password: 'stud_syahmi2026', course: '3/SKEMH' },
 
@@ -38,7 +38,7 @@ export const ALLOWED_USERS: Record<string, { name: string; role: UserRole; passw
 
   // === STAFF MEMBERS REGISTERED (6 Accounts) ===
 
-  'razali@utm.my': { name: 'INCIK RAZALI BIN IDRIS', role: 'staff', password: 'staff_razali2026' },
+  'naqiyah@graduate.utm.my': { name: 'INCIK RAZALI BIN IDRIS', role: 'staff', password: 'nn' },
 
   'aminah@utm.my': { name: 'PUAN AMINAH BINTI SULAIMAN', role: 'staff', password: 'staff_aminah2026' },
 
