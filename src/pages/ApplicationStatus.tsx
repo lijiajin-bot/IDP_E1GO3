@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Clock, ShieldCheck, UserX, UserCheck, CheckCircle, FileText, Camera, UploadCloud, Ban, Undo2, Table, AlertTriangle, PackageCheck, Wrench, UserMinus, Phone, XCircle } from 'lucide-react';
+import { Clock, ShieldCheck, UserX, UserCheck, CheckCircle, FileText, Camera, UploadCloud, Ban, Undo2, Table, AlertTriangle, PackageCheck, Wrench, UserMinus, Phone, XCircle, CopyCheck } from 'lucide-react';
 import { useAppState } from '../context';
 import type { UserRole } from '../auth';
 
@@ -35,6 +35,9 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     equipmentImage: '',
   });
   const [returnError, setReturnError] = useState('');
+
+  // Local state to keep track of which student's phone number was just copied
+  const [copiedAppId, setCopiedAppId] = useState<string | null>(null);
 
   const isStaff = userRole === 'staff';
   const cleanUserEmail = currentUserEmail.trim().toLowerCase();
@@ -231,6 +234,17 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     setActiveReturnAppId(null);
     setReturnForm({ dateReturned: new Date().toISOString().split('T')[0], overseeingStaff: '', equipmentImage: '' });
     setReturnError('');
+  };
+
+  // Helper handling copying action clean pipeline natively
+  const handleCopyPhoneNumber = (appId: string, phoneNum: string) => {
+    if (!phoneNum) return;
+    navigator.clipboard.writeText(phoneNum).then(() => {
+      setCopiedAppId(appId);
+      setTimeout(() => {
+        setCopiedAppId(null);
+      }, 2000);
+    });
   };
 
   return (
@@ -512,7 +526,6 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                               Approve Borrow
                             </button>
                             
-                            {/* FIXED PIPELINE: Separated Action Trigger Buttons to prevent un-banning bugs */}
                             <button
                               onClick={() => rejectApplication(app.id)}
                               className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-all flex items-center gap-1"
@@ -522,7 +535,6 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
 
                             <button
                               onClick={() => {
-                                // Safeguard: ONLY trigger block toggle if they aren't already flagged
                                 if (!isFlagged) {
                                   toggleBlacklistUser(studentEmail);
                                 }
@@ -659,14 +671,28 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                             {isOverdue && (
                               <>
                                 {details.phoneNumber && (
-                                  <a
-                                    href={`tel:${details.phoneNumber}`}
-                                    className="px-2.5 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-[10px] font-bold border border-gray-800 flex items-center gap-1 transition-all shadow-sm"
-                                    title={`Call ${details.fullName} at ${details.phoneNumber}`}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCopyPhoneNumber(app.id, details.phoneNumber)}
+                                    className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border flex items-center gap-1 transition-all shadow-sm ${
+                                      copiedAppId === app.id
+                                        ? 'bg-emerald-600 border-emerald-600 text-white'
+                                        : 'bg-gray-900 hover:bg-gray-800 text-white border-gray-800'
+                                    }`}
+                                    title="Click to copy student phone number"
                                   >
-                                    <Phone className="w-3 h-3" />
-                                    Contact
-                                  </a>
+                                    {copiedAppId === app.id ? (
+                                      <>
+                                        <CopyCheck className="w-3 h-3" />
+                                        Copied!
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Phone className="w-3 h-3" />
+                                        Contact
+                                      </>
+                                    )}
+                                  </button>
                                 )}
 
                                 <button
