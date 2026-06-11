@@ -64,7 +64,7 @@ export interface Application {
   returnVerifiedAt?: string;
 }
 
-// Institutional User Registry Schema
+// User registry structure definition
 export interface UserRegistryEntry {
   fullName: string;
   role: 'STUDENT' | 'STAFF' | 'ADMIN';
@@ -89,7 +89,7 @@ interface AppState {
   toggleBlacklistUser: (email: string) => void;
   getLastSubmittedForm: () => BorrowFormData | null;
   
-  // Credentials Verification & Override State Model
+  // Credentials verification signature models
   userRegistry: Record<string, UserRegistryEntry>;
   dynamicPasswords: Record<string, string>;
   resetUserPassword: (email: string, newPassword: string) => boolean;
@@ -98,7 +98,7 @@ interface AppState {
 
 const AppContext = createContext<AppState | null>(null);
 
-// Built-in Institutional User Registry to link authentication profiles
+// Official Built-in Institutional Credentials Registry
 const INITIAL_USER_REGISTRY: Record<string, UserRegistryEntry> = {
   'naqiyah@graduate.utm.my': {
     fullName: 'NAQIYAH BINTI AHMAD',
@@ -271,7 +271,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return saved ? JSON.parse(saved) : initialInventory;
   });
 
-  // Local state container tracking password changes
+  // Track password changes and overrides reactively
   const [dynamicPasswords, setDynamicPasswords] = useState<Record<string, string>>(() => {
     const saved = localStorage.getItem('utm_dynamic_passwords');
     return saved ? JSON.parse(saved) : {};
@@ -284,7 +284,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => { localStorage.setItem('utm_component_inventory', JSON.stringify(componentInventory)); }, [componentInventory]);
   useEffect(() => { localStorage.setItem('utm_dynamic_passwords', JSON.stringify(dynamicPasswords)); }, [dynamicPasswords]);
 
-  // Validates if an account exists in the official institutional layout before applying changes
+  // Modifies customized passkeys safely without needing an external text file layout
   const resetUserPassword = useCallback((email: string, newPassword: string): boolean => {
     const normalizedEmail = email.toLowerCase().trim();
     if (INITIAL_USER_REGISTRY[normalizedEmail]) {
@@ -297,7 +297,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return false;
   }, []);
 
-  // Multi-tier validator matching credentials across default registers and overridden values
+  // Central validator reading default records AND reset overrides safely
   const verifyUserCredentials = useCallback((email: string, passcode: string) => {
     const normalizedEmail = email.toLowerCase().trim();
     const userProfile = INITIAL_USER_REGISTRY[normalizedEmail];
@@ -475,7 +475,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         toggleBlacklistUser,
         getLastSubmittedForm,
         
-        // Expose new variables
+        // Expose credentials helpers safely
         userRegistry: INITIAL_USER_REGISTRY,
         dynamicPasswords,
         resetUserPassword,
