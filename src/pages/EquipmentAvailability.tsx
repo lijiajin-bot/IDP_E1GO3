@@ -1,22 +1,28 @@
 import { useState } from 'react';
-import { Cpu, CheckCircle2, AlertTriangle, Clock, History, FileSpreadsheet, Eye } from 'lucide-react';
+import { Cpu, CheckCircle2, AlertTriangle, Clock, History, FileSpreadsheet, Eye, Wrench } from 'lucide-react';
 import BorrowFormModal, { type BorrowFormData } from '../components/BorrowFormModal';
 import TinkerIoTSimulator from '../components/TinkerIoTSimulator';
 import { useAppState, type EquipmentStatus, type Application } from '../context';
 import type { UserRole } from '../auth';
 
-const statusBadge: Record<EquipmentStatus, string> = {
+// SURGICAL ADDITION: Extended the map dictionary to support BROKEN and CALIBRATING badging layout
+const statusBadge: Record<EquipmentStatus | 'BROKEN' | 'CALIBRATING', string> = {
   'AVAILABLE': 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'PENDING PICKUP': 'bg-orange-50 text-orange-700 border-orange-200',
   'BORROWED': 'bg-red-50 text-red-700 border-red-200',
   'RETURN_PENDING': 'bg-blue-50 text-blue-700 border-blue-200',
+  'BROKEN': 'bg-red-100 text-red-800 border-red-300',
+  'CALIBRATING': 'bg-orange-100 text-orange-800 border-orange-300',
 };
 
-const statusDot: Record<EquipmentStatus, string> = {
+// SURGICAL ADDITION: Extended status color dot maps
+const statusDot: Record<EquipmentStatus | 'BROKEN' | 'CALIBRATING', string> = {
   'AVAILABLE': 'bg-emerald-500',
   'PENDING PICKUP': 'bg-orange-500',
   'BORROWED': 'bg-red-500',
   'RETURN_PENDING': 'bg-blue-500',
+  'BROKEN': 'bg-red-600 animate-pulse',
+  'CALIBRATING': 'bg-orange-500 animate-pulse',
 };
 
 interface EquipmentAvailabilityProps {
@@ -157,7 +163,12 @@ export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentA
                         className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${statusBadge[row.status] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}
                       >
                         <span className={`w-1.5 h-1.5 rounded-full ${statusDot[row.status] ?? 'bg-gray-400'}`} />
-                        {row.status === 'PENDING PICKUP' ? 'PENDING APPROVAL' : row.status}
+                        {row.status === 'PENDING PICKUP' 
+                          ? 'PENDING APPROVAL' 
+                          : (row.status === 'BROKEN' || row.status === 'CALIBRATING') 
+                            ? 'NOT AVAILABLE' 
+                            : row.status
+                        }
                       </span>
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs font-medium">{row.verificationBy}</td>
@@ -169,6 +180,12 @@ export function EquipmentAvailability({ userRole, currentUserEmail }: EquipmentA
                         >
                           Borrow
                         </button>
+                      ) : isStudent && (row.status === 'BROKEN' || row.status === 'CALIBRATING') ? (
+                        /* SURGICAL ADDITION: Replaces default dash with safe blocked notification layout */
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-md select-none">
+                          <Wrench className="w-3 h-3" />
+                          Maintenance
+                        </span>
                       ) : (
                         <span className="text-[10px] text-gray-400 font-medium">--</span>
                       )}
