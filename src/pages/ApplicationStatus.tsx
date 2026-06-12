@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Clock, ShieldCheck, UserX, UserCheck, CheckCircle, FileText, Camera, UploadCloud, Ban, Undo2, Table, AlertTriangle, PackageCheck, Wrench, UserMinus, Phone, XCircle, CopyCheck, SendHorizontal } from 'lucide-react';
 import emailjs from '@emailjs/browser';
-import { useAppState } from '../context';
+import { useAppState, type Application } from '../context';
 import type { UserRole } from '../auth';
 
 interface ApplicationStatusProps {
@@ -18,6 +18,7 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     componentInventory,
     approveApplication,
     rejectApplication,
+    banApplication,
     blacklistedEmails,
     toggleBlacklistUser,
     submitReturnRequest,
@@ -42,6 +43,8 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
   const [copiedAppId, setCopiedAppId] = useState<string | null>(null);
   const [smsNotificationPayload, setSmsNotificationPayload] = useState<{ isOpen: boolean; studentName: string; phone: string; message: string } | null>(null);
   const [insufficientStockAppId, setInsufficientStockAppId] = useState<string | null>(null);
+  const [banConfirmAppId, setBanConfirmAppId] = useState<string | null>(null);
+  const [banToast, setBanToast] = useState<string | null>(null);
 
   const cleanUserEmail = currentUserEmail.trim().toLowerCase();
   
@@ -51,11 +54,17 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
   // ==========================================
   // STATIC DEMO BACKUPS (Used if context arrays are empty)
   // ==========================================
-  const backupQueue = [
+  const backupQueue: Application[] = [
     {
       id: "demo-app-1",
       equipmentCode: "AGT570",
       stage: "PENDING",
+      status: "PENDING",
+      isBlacklisted: false,
+      isApproved: false,
+      isReturned: false,
+      isReturnVerified: false,
+      submittedAt: "2026-06-12T09:30:00Z",
       formData: {
         fullName: "DIVYA A/P RAMAN",
         emailAddress: "divya@graduate.utm.my",
@@ -68,30 +77,46 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
     }
   ];
 
-  const backupLog = [
+  const backupLog: Application[] = [
     {
       id: "demo-app-2",
       equipmentCode: "AGT569",
       stage: "ACTIVE_BORROW",
+      status: "APPROVED",
+      isBlacklisted: false,
+      isApproved: true,
       isReturned: false,
-      returnDetails: null,
+      isReturnVerified: false,
+      submittedAt: "2026-06-01T09:15:00Z",
+      approvedAt: "2026-06-01T09:45:00Z",
+      processedAt: "2026-06-01T09:45:00Z",
       formData: {
         fullName: "YONG QIAN SHUN",
         emailAddress: "yongshun@graduate.utm.my",
         phoneNumber: "+60177654321",
         yearCourse: "3/SKEEH",
-        dateBorrow: "2026-06-01", // Marked as past date to instantly test Overdue EmailJS alerts!
+        dateBorrow: "2026-06-01",
         duration: "2 Days",
         returnTime: "2026-06-03"
       }
     }
   ];
 
-  const backupLedger = [
+  const backupLedger: Application[] = [
     {
       id: "demo-app-3",
       equipmentCode: "MXW210",
       stage: "HISTORICAL",
+      status: "RETURNED",
+      isBlacklisted: false,
+      isApproved: true,
+      isReturned: true,
+      isReturnVerified: true,
+      submittedAt: "2026-05-20T08:00:00Z",
+      approvedAt: "2026-05-20T08:30:00Z",
+      processedAt: "2026-05-21T14:00:00Z",
+      returnSubmittedAt: "2026-05-21T13:45:00Z",
+      returnVerifiedAt: "2026-05-21T14:15:00Z",
       formData: {
         fullName: "TAN ZHE LAM",
         emailAddress: "tanzhelam@graduate.utm.my",
@@ -103,7 +128,8 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
       },
       returnDetails: {
         dateReturned: "2026-05-21",
-        overseeingStaff: "INCIK RAZALI"
+        overseeingStaff: "INCIK RAZALI",
+        equipmentImage: ""
       }
     }
   ];
@@ -541,8 +567,10 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
             <tbody>
               {incomingVerificationQueue.map((app) => {
                 const details = app.formData;
+                const studentEmail = details.emailAddress.toLowerCase().trim();
+                const isFlagged = blacklistedEmails?.includes(studentEmail) || app.isBlacklisted;
                 return (
-                  <tr key={app.id} className="border-b border-gray-100 hover:bg-gray-50/40 transition-colors">
+                  <tr key={app.id} className={`border-b border-gray-100 transition-colors ${isFlagged ? 'bg-red-50/30' : 'hover:bg-gray-50/40'}`}>
                     <td className="px-4 py-3 space-y-0.5">
                       <div className="font-bold text-gray-900 uppercase">{details.fullName}</div>
                       <div className="text-gray-500 font-mono text-[10px]">{details.emailAddress}</div>
@@ -558,9 +586,15 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                       <div>Return Target: <span className="font-medium text-gray-900">{details.returnTime}</span></div>
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-1 rounded-full font-bold text-[10px]">
-                        ✓ CLEAR
-                      </span>
+                      {isFlagged ? (
+                        <span className="inline-flex items-center gap-1 bg-red-50 border border-red-200 text-red-700 px-2.5 py-1 rounded-full font-bold text-[10px]">
+                          <UserX className="w-3 h-3" /> RESTRICTED
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 px-2.5 py-1 rounded-full font-bold text-[10px]">
+                          ✓ CLEAR
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-center">
                       {isStaff ? (
@@ -573,15 +607,24 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                           <div className="flex items-center justify-center gap-1.5 flex-wrap">
                             <button
                               onClick={() => handleApproveWithCascade(app.id, app.equipmentCode)}
-                              className="px-3 py-1.5 rounded-lg text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm"
+                              disabled={isFlagged}
+                              className={`px-3 py-1.5 rounded-lg text-[10px] font-bold text-white shadow-sm transition-colors ${
+                                isFlagged ? 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none' : 'bg-emerald-600 hover:bg-emerald-700'
+                              }`}
                             >
                               Approve Borrow
                             </button>
                             <button
                               onClick={() => rejectApplication && rejectApplication(app.id)}
-                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors inline-flex items-center gap-1"
                             >
                               <XCircle className="w-3 h-3" /> Reject
+                            </button>
+                            <button
+                              onClick={() => setBanConfirmAppId(app.id)}
+                              className="px-2.5 py-1.5 rounded-lg text-[10px] font-bold bg-red-50 text-red-700 border border-red-300 hover:bg-red-100 transition-colors inline-flex items-center gap-1"
+                            >
+                              <Ban className="w-3 h-3" /> Ban
                             </button>
                           </div>
                         </div>
@@ -726,10 +769,11 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
             <tbody>
               {historicalLedger.map((app) => {
                 const details = app.formData;
+                const isBanned = app.status === 'BANNED';
                 return (
-                  <tr key={app.id} className="border-b border-gray-100 hover:bg-gray-50/40 transition-colors text-slate-500">
+                  <tr key={app.id} className={`border-b border-gray-100 transition-colors ${isBanned ? 'bg-red-50/30 hover:bg-red-50/50' : 'hover:bg-gray-50/40 text-slate-500'}`}>
                     <td className="px-4 py-2.5">
-                      <div className="font-bold text-gray-700 uppercase">{details.fullName}</div>
+                      <div className={`font-bold uppercase ${isBanned ? 'text-red-800' : 'text-gray-700'}`}>{details.fullName}</div>
                       <div className="font-mono text-[10px] text-slate-400">{details.emailAddress}</div>
                     </td>
                     <td className="px-4 py-2.5 font-mono text-xs font-semibold text-slate-600">
@@ -737,12 +781,18 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                     </td>
                     <td className="px-4 py-2.5 text-[10px] space-y-0.5">
                       <div>Borrowed: <span className="text-slate-700 font-medium">{details.dateBorrow}</span></div>
-                      <div>Returned: <span className="text-slate-700 font-medium">{app.returnDetails?.dateReturned || details.returnTime}</span></div>
+                      <div>{isBanned ? 'Banned at:' : 'Returned:'} <span className="text-slate-700 font-medium">{app.processedAt?.split('T')[0] || app.returnDetails?.dateReturned || details.returnTime}</span></div>
                     </td>
                     <td className="px-4 py-2.5 text-center">
-                      <span className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold text-[9px]">
-                        🛡️ AUDITED COMPLIANT
-                      </span>
+                      {isBanned ? (
+                        <span className="inline-flex items-center gap-1 bg-red-100 border border-red-200 text-red-700 px-2 py-0.5 rounded font-bold text-[9px]">
+                          <Ban className="w-2.5 h-2.5" /> REJECTED - BANNED
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-bold text-[9px]">
+                          AUDITED COMPLIANT
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -776,6 +826,63 @@ export default function ApplicationStatus({ userRole, currentUserEmail = "" }: A
                 <button type="button" onClick={() => { alert('Simulated SMS dispatch successful!'); setSmsNotificationPayload(null); }} className="w-full bg-emerald-600 text-white font-bold py-2 rounded-lg text-[10px]">Simulate Fire!</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* BAN CONFIRMATION DIALOG */}
+      {banConfirmAppId && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl border border-red-200 shadow-2xl max-w-sm w-full overflow-hidden">
+            <div className="bg-gradient-to-r from-red-800 to-red-900 text-white px-4 py-3 flex items-center gap-2">
+              <Ban className="w-4 h-4" />
+              <h3 className="font-bold text-xs tracking-wide">Confirm Student Ban</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-gray-700 font-medium">
+                Are you sure you want to ban this student from borrowing equipment?
+              </p>
+              <p className="text-[10px] text-gray-500">
+                This will add the student to the restricted list, remove the application from the pending queue, and prevent future borrow submissions. The record will be archived for audit purposes.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBanConfirmAppId(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 rounded-lg text-[10px] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (banApplication) banApplication(banConfirmAppId);
+                    const bannedApp = incomingVerificationQueue.find(a => a.id === banConfirmAppId);
+                    const studentName = bannedApp?.formData?.fullName || 'Student';
+                    setBanConfirmAppId(null);
+                    setBanToast(studentName);
+                    setTimeout(() => setBanToast(null), 4000);
+                  }}
+                  className="flex-1 bg-red-700 hover:bg-red-800 text-white font-bold py-2 rounded-lg text-[10px] transition-colors inline-flex items-center justify-center gap-1"
+                >
+                  <UserX className="w-3 h-3" /> Confirm Ban
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BAN SUCCESS TOAST */}
+      {banToast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+          <div className="bg-red-950 text-white px-4 py-3 rounded-lg shadow-xl border border-red-800 flex items-center gap-2 max-w-sm">
+            <UserX className="w-4 h-4 text-red-300 flex-shrink-0" />
+            <div>
+              <p className="text-xs font-bold">{banToast} has been banned</p>
+              <p className="text-[10px] text-red-300">Application removed from queue. Record archived for audit.</p>
+            </div>
+            <button type="button" onClick={() => setBanToast(null)} className="ml-2 text-red-400 hover:text-white font-bold text-sm">✕</button>
           </div>
         </div>
       )}

@@ -12,7 +12,7 @@ import { updateUserPasswordInRegistry } from './auth';
 
 export type EquipmentStatus = 'AVAILABLE' | 'PENDING PICKUP' | 'BORROWED' | 'RETURN_PENDING' | 'BROKEN' | 'CALIBRATING';
 
-export type AppStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
+export type AppStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED' | 'BANNED';
 
 export interface ReturnDetailsData {
   dateReturned: string;
@@ -58,7 +58,7 @@ export interface Application {
   photoAttachment?: string;
   processedAt?: string;
   returnDetails?: ReturnDetailsData;
-  stage: 'PENDING' | 'ACTIVE_BORROW' | 'HISTORICAL' | 'RETURN_PENDING';
+  stage: 'PENDING' | 'ACTIVE_BORROW' | 'HISTORICAL' | 'RETURN_PENDING' | 'BANNED';
   isApproved: boolean;
   isReturned: boolean;
   isReturnVerified: boolean;
@@ -80,6 +80,7 @@ interface AppState {
   submitApplication: (formData: BorrowFormData, equipmentCode: string, photoAttachment?: string) => boolean;
   approveApplication: (appId: string) => void;
   rejectApplication: (appId: string) => void;
+  banApplication: (appId: string) => void;
   submitReturnRequest: (appId: string, returnData: ReturnDetailsData) => void;
   approveReturnRequest: (appId: string) => void;
   toggleBlacklistUser: (email: string) => void;
@@ -428,7 +429,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setApplicationQueue((prevQueue) => {
       const target = prevQueue.find((a) => a.id === appId);
       if (target) {
-        // Only revert equipment status if no other pending/approved applications use this code
         const otherActiveForCode = prevQueue.filter(
           (a) => a.id !== appId && a.equipmentCode === target.equipmentCode &&
             (a.stage === 'PENDING' || a.stage === 'ACTIVE_BORROW')
@@ -440,6 +440,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
       return prevQueue.filter((a) => a.id !== appId);
+    });
+  }, []);
+
+  const banApplication = useCallback((appId: string) => {
+    setApplicationQueue((prevQueue) => {
+      const target = prevQueue.find((a) => a.id === appId);
+      if (!target) return prevQueue;
+
+      const studentEmail = target.formData?.emailAddress?.toLowerCase().trim();
+      if (studentEmail) {
+        setBlacklistedEmails((prev) => {
+          if (prev.includes(studentEmail)) return prev;
+          return [...prev, studentEmail];
+        });
+      }
+
+      // Revert equipment status if no other active apps for this code
+      const otherActiveForCode = prevQueue.filter(
+        (a) => a.id !== appId && a.equipmentCode === target.equipmentCode &&
+          (a.stage === 'PENDING' || a.stage === 'ACTIVE_BORROW')
+      );
+      if (otherActiveForCode.length === 0) {
+        setEquipmentRows((prevRows) =>
+          prevRows.map((row) => row.code === target.equipmentCode ? { ...row, status: 'AVAILABLE' as const } : row)
+        );
+      }
+
+      // Move to HISTORICAL with BANNED status (preserved for audit)
+      return prevQueue.map((a) =>
+        a.id === appId
+          ? {
+              ...a,
+              status: 'BANNED' as const,
+              stage: 'HISTORICAL' as const,
+              isBlacklisted: true,
+              processedAt: new Date().toISOString(),
+            }
+          : a
+      );
     });
   }, []);
 
@@ -563,6 +602,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         submitApplication,
         approveApplication,
         rejectApplication,
+        banApplication,
         submitReturnRequest,
         approveReturnRequest,
         toggleBlacklistUser,
