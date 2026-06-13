@@ -14,7 +14,7 @@ import TinkerIoTSimulator from '../components/TinkerIoTSimulator';
 import { useAppState, type EquipmentStatus, type Application } from '../context';
 import type { UserRole } from '../auth';
 
-const statusBadge: Record<string, string> = {
+const statusBadge: Record<EquipmentStatus, string> = {
   AVAILABLE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   'PENDING PICKUP': 'bg-orange-50 text-orange-700 border-orange-200',
   BORROWED: 'bg-red-50 text-red-700 border-red-200',
@@ -23,7 +23,7 @@ const statusBadge: Record<string, string> = {
   CALIBRATING: 'bg-orange-100 text-orange-800 border-orange-300',
 };
 
-const statusDot: Record<string, string> = {
+const statusDot: Record<EquipmentStatus, string> = {
   AVAILABLE: 'bg-emerald-500',
   'PENDING PICKUP': 'bg-orange-500',
   BORROWED: 'bg-red-500',
@@ -36,26 +36,6 @@ interface EquipmentAvailabilityProps {
   userRole: UserRole;
   currentUserEmail: string;
   onSuccessRedirect?: () => void;
-}
-
-function normalizeEquipmentStatus(status: unknown): EquipmentStatus {
-  const value = String(status || 'AVAILABLE').trim().toUpperCase();
-
-  if (value === 'AVAILABLE') return 'AVAILABLE';
-  if (value === 'PENDING PICKUP') return 'PENDING PICKUP';
-  if (value === 'BORROWED') return 'BORROWED';
-  if (value === 'RETURN_PENDING' || value === 'RETURN PENDING') return 'RETURN_PENDING';
-  if (value === 'BROKEN') return 'BROKEN';
-  if (value === 'CALIBRATING') return 'CALIBRATING';
-
-  return 'AVAILABLE';
-}
-
-function getStatusLabel(status: EquipmentStatus): string {
-  if (status === 'PENDING PICKUP') return 'PENDING APPROVAL';
-  if (status === 'BROKEN' || status === 'CALIBRATING') return 'NOT AVAILABLE';
-  if (status === 'RETURN_PENDING') return 'RETURN PENDING';
-  return status;
 }
 
 export function EquipmentAvailability({
@@ -74,20 +54,13 @@ export function EquipmentAvailability({
   const [borrowTarget, setBorrowTarget] = useState<string | null>(null);
   const [activePreviewImage, setActivePreviewImage] = useState<string | null>(null);
 
-  const isStudent = String(userRole || '').trim().toLowerCase() === 'student';
-
-  const normalizedRows = equipmentRows.map((row) => ({
-    ...row,
-    status: normalizeEquipmentStatus(row.status),
-  }));
-
-  const availableCount = normalizedRows.filter((row) => row.status === 'AVAILABLE').length;
-  const pendingCount = normalizedRows.filter(
-    (row) => row.status === 'PENDING PICKUP' || row.status === 'RETURN_PENDING'
+  const availableCount = equipmentRows.filter((r) => r.status === 'AVAILABLE').length;
+  const pendingCount = equipmentRows.filter(
+    (r) => r.status === 'PENDING PICKUP' || r.status === 'RETURN_PENDING'
   ).length;
-  const borrowedCount = normalizedRows.filter((row) => row.status === 'BORROWED').length;
-  const maintenanceCount = normalizedRows.filter(
-    (row) => row.status === 'BROKEN' || row.status === 'CALIBRATING'
+  const borrowedCount = equipmentRows.filter((r) => r.status === 'BORROWED').length;
+  const maintenanceCount = equipmentRows.filter(
+    (r) => r.status === 'BROKEN' || r.status === 'CALIBRATING'
   ).length;
 
   const handleBorrowSubmitWithAttachment = async (
@@ -96,12 +69,6 @@ export function EquipmentAvailability({
   ): Promise<boolean> => {
     if (!borrowTarget) return false;
 
-    /*
-      Important:
-      Students submit the requested equipment code only.
-      Auto-redirection must happen later when staff approves the application,
-      inside the backend/database approve logic.
-    */
     const success = await submitApplication(data, borrowTarget, photoBase64);
 
     if (success) {
@@ -112,8 +79,8 @@ export function EquipmentAvailability({
     return success;
   };
 
-  const agt567Status =
-    normalizedRows.find((row) => row.code === 'AGT567')?.status ?? 'AVAILABLE';
+  const agt567Status = equipmentRows.find((r) => r.code === 'AGT567')?.status ?? 'AVAILABLE';
+  const isStudent = userRole === 'student';
 
   if (borrowTarget && isStudent) {
     return (
@@ -142,7 +109,7 @@ export function EquipmentAvailability({
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-emerald-50 flex items-center justify-center">
@@ -181,7 +148,7 @@ export function EquipmentAvailability({
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-slate-50 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
               <Wrench className="w-5 h-5 text-slate-600" />
             </div>
             <div>
@@ -246,92 +213,75 @@ export function EquipmentAvailability({
               </thead>
 
               <tbody>
-                {normalizedRows.map((row) => {
-                  const rowStatus = normalizeEquipmentStatus(row.status);
-                  const isAvailable = rowStatus === 'AVAILABLE';
-                  const isMaintenance =
-                    rowStatus === 'BROKEN' || rowStatus === 'CALIBRATING';
-
-                  return (
-                    <tr
-                      key={row.code}
-                      className={`border-b border-gray-100 transition-colors ${
-                        row.code === 'AGT567' ? 'bg-utm-gold/5' : 'hover:bg-gray-50/50'
-                      }`}
-                    >
-                      <td className="px-4 py-3 text-center text-gray-400 text-xs">
-                        {row.no}
-                      </td>
-
-                      <td className="px-4 py-3 font-mono font-bold text-gray-900 text-xs">
-                        {row.code}
-                      </td>
-
-                      <td className="px-4 py-3 text-gray-900 text-xs font-semibold">
-                        {row.equipmentName || 'Digital Oscilloscope'}
-                      </td>
-
-                      <td className="px-4 py-3 text-gray-600 text-xs">
-                        {row.equipmentType || row.code.replace(/[0-9]/g, '') || 'AGT'}
-                      </td>
-
-                      <td className="px-4 py-3 text-center text-gray-900 text-xs font-bold">
-                        {typeof row.quantityAvailable === 'number'
-                          ? row.quantityAvailable
-                          : isAvailable
-                            ? 1
-                            : 0}
-                      </td>
-
-                      <td className="px-4 py-3 text-gray-600 text-xs">
-                        {row.lastDateUsed}
-                      </td>
-
-                      <td className="px-4 py-3 text-gray-600 text-xs">
-                        {row.labLocation}
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
+                {equipmentRows.map((row) => (
+                  <tr
+                    key={row.code}
+                    className={`border-b border-gray-100 transition-colors ${
+                      row.code === 'AGT567' ? 'bg-utm-gold/5' : 'hover:bg-gray-50/50'
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-center text-gray-400 text-xs">
+                      {row.no}
+                    </td>
+                    <td className="px-4 py-3 font-mono font-bold text-gray-900 text-xs">
+                      {row.code}
+                    </td>
+                    <td className="px-4 py-3 text-gray-700 text-xs font-semibold">
+                      {row.equipmentName}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs font-mono">
+                      {row.equipmentType}
+                    </td>
+                    <td className="px-4 py-3 text-center text-xs font-bold">
+                      {row.quantityAvailable}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {row.lastDateUsed}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">
+                      {row.labLocation}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
+                          statusBadge[row.status] ?? 'bg-gray-50 text-gray-600 border-gray-200'
+                        }`}
+                      >
                         <span
-                          className={`inline-flex items-center gap-1.5 text-[10px] font-bold px-2.5 py-1 rounded-full border ${
-                            statusBadge[rowStatus] ??
-                            'bg-gray-50 text-gray-600 border-gray-200'
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            statusDot[row.status] ?? 'bg-gray-400'
                           }`}
+                        />
+                        {row.status === 'PENDING PICKUP'
+                          ? 'PENDING APPROVAL'
+                          : row.status === 'BROKEN' || row.status === 'CALIBRATING'
+                            ? 'MAINTENANCE'
+                            : row.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs font-medium">
+                      {row.verificationBy}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {isStudent && row.status === 'AVAILABLE' && row.quantityAvailable > 0 ? (
+                        <button
+                          onClick={() => setBorrowTarget(row.code)}
+                          className="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-utm-maroon text-white hover:bg-utm-maroon-dark transition-colors cursor-pointer"
                         >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              statusDot[rowStatus] ?? 'bg-gray-400'
-                            }`}
-                          />
-                          {getStatusLabel(rowStatus)}
+                          Borrow
+                        </button>
+                      ) : isStudent &&
+                        (row.status === 'BROKEN' || row.status === 'CALIBRATING') ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-md select-none">
+                          <Wrench className="w-3 h-3" />
+                          Maintenance
                         </span>
-                      </td>
-
-                      <td className="px-4 py-3 text-gray-600 text-xs font-medium">
-                        {row.verificationBy}
-                      </td>
-
-                      <td className="px-4 py-3 text-center">
-                        {isStudent && isAvailable ? (
-                          <button
-                            type="button"
-                            onClick={() => setBorrowTarget(row.code)}
-                            className="px-3 py-1.5 text-[10px] font-bold rounded-lg bg-utm-maroon text-white hover:bg-utm-maroon-dark transition-colors cursor-pointer"
-                          >
-                            Borrow
-                          </button>
-                        ) : isStudent && isMaintenance ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-red-700 bg-red-50 border border-red-200 rounded-md select-none">
-                            <Wrench className="w-3 h-3" />
-                            Maintenance
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-gray-400 font-medium">--</span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      ) : (
+                        <span className="text-[10px] text-gray-400 font-medium">--</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -358,7 +308,7 @@ export function EquipmentAvailability({
                   Processed Applications History Log (Active Borrows)
                 </h3>
                 <p className="text-[10px] text-gray-500">
-                  Equipment currently borrowed and not yet returned
+                  Equipment currently out in field context layout - not yet returned
                 </p>
               </div>
             </div>
@@ -371,7 +321,6 @@ export function EquipmentAvailability({
                     <th className="p-4">Assigned Code</th>
                     <th className="p-4">Student Details</th>
                     <th className="p-4">Timestamp Duration</th>
-                    <th className="p-4">Redirect Note</th>
                     <th className="p-4">Live Status Tracking</th>
                   </tr>
                 </thead>
@@ -379,7 +328,7 @@ export function EquipmentAvailability({
                 <tbody className="divide-y divide-gray-100">
                   {processedApplicationsLog.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-gray-400 italic">
+                      <td colSpan={5} className="p-6 text-center text-gray-400 italic">
                         No active borrowing cycles currently deployed in the field.
                       </td>
                     </tr>
@@ -389,11 +338,16 @@ export function EquipmentAvailability({
                         <td className="p-4 font-mono font-bold text-gray-500 text-sm">
                           {app.originalEquipmentCode || app.equipmentCode}
                         </td>
-
-                        <td className="p-4 font-mono font-bold text-utm-maroon text-sm">
-                          {app.finalEquipmentCode || app.equipmentCode}
+                        <td className="p-4">
+                          <div className="font-mono font-bold text-utm-maroon text-sm">
+                            {app.finalEquipmentCode || app.equipmentCode}
+                          </div>
+                          {app.autoRedirectNote && (
+                            <div className="mt-1 max-w-xs text-[10px] text-amber-700 font-semibold">
+                              {app.autoRedirectNote}
+                            </div>
+                          )}
                         </td>
-
                         <td className="p-4">
                           <div className="font-bold text-gray-900 uppercase">
                             {app.formData.fullName}
@@ -402,7 +356,6 @@ export function EquipmentAvailability({
                             {app.formData.emailAddress}
                           </div>
                         </td>
-
                         <td className="p-4 text-gray-600">
                           <div>
                             Borrowed: <b>{app.formData.dateBorrow}</b>
@@ -411,11 +364,6 @@ export function EquipmentAvailability({
                             Duration Limit: {app.formData.duration}
                           </div>
                         </td>
-
-                        <td className="p-4 text-[10px] text-gray-500 max-w-xs">
-                          {app.autoRedirectNote || '-'}
-                        </td>
-
                         <td className="p-4">
                           <span className="inline-flex items-center gap-1 font-bold text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 uppercase">
                             Still Borrowing / Not Returned
@@ -437,7 +385,7 @@ export function EquipmentAvailability({
                   All-Time Transaction Historical Ledger
                 </h3>
                 <p className="text-[10px] text-gray-500">
-                  Permanent archived transaction records
+                  Immutable structural system record trail logs - cannot be deleted
                 </p>
               </div>
             </div>
@@ -447,7 +395,7 @@ export function EquipmentAvailability({
                 <thead>
                   <tr className="bg-gray-50/70 border-b border-gray-200 text-gray-500 uppercase tracking-wider text-[10px] font-bold">
                     <th className="p-4">Original Code</th>
-                    <th className="p-4">Assigned Code</th>
+                    <th className="p-4">Final Code</th>
                     <th className="p-4">Student Account</th>
                     <th className="p-4">Time Window Lifecycle</th>
                     <th className="p-4">Overseeing Sign-Off</th>
@@ -468,11 +416,16 @@ export function EquipmentAvailability({
                         <td className="p-4 font-mono font-bold text-gray-500">
                           {app.originalEquipmentCode || app.equipmentCode}
                         </td>
-
-                        <td className="p-4 font-mono font-bold text-gray-900">
-                          {app.finalEquipmentCode || app.equipmentCode}
+                        <td className="p-4">
+                          <div className="font-mono font-bold text-gray-900">
+                            {app.finalEquipmentCode || app.equipmentCode}
+                          </div>
+                          {app.autoRedirectNote && (
+                            <div className="mt-1 max-w-xs text-[10px] text-amber-700 font-semibold">
+                              {app.autoRedirectNote}
+                            </div>
+                          )}
                         </td>
-
                         <td className="p-4">
                           <div className="font-semibold text-gray-800 uppercase">
                             {app.formData.fullName}
@@ -481,18 +434,15 @@ export function EquipmentAvailability({
                             {app.formData.emailAddress}
                           </div>
                         </td>
-
                         <td className="p-4 text-gray-500 text-[11px]">
                           <div>Issued: {app.formData.dateBorrow}</div>
                           <div className="text-emerald-600 font-medium">
                             Returned: {app.returnDetails?.dateReturned || 'Completed'}
                           </div>
                         </td>
-
                         <td className="p-4 font-medium text-gray-700 uppercase">
                           {app.returnDetails?.overseeingStaff || 'SYSTEM AUTO'}
                         </td>
-
                         <td className="p-4 text-center">
                           {app.returnDetails?.equipmentImage ? (
                             <button
@@ -527,20 +477,18 @@ export function EquipmentAvailability({
         >
           <div
             className="relative max-w-lg w-full bg-white rounded-lg p-3 shadow-xl"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <img
               src={activePreviewImage}
               alt="Verification snapshot proof"
               className="w-full h-auto rounded object-contain max-h-[70vh]"
             />
-
             <button
-              type="button"
               onClick={() => setActivePreviewImage(null)}
               className="absolute top-2 right-2 bg-black text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold cursor-pointer"
             >
-              X
+              x
             </button>
           </div>
         </div>
