@@ -174,6 +174,12 @@ export default function BorrowForm({
       const success = await onSubmit(form, photoAttachment || undefined);
 
       if (success) {
+        await sendSMS(
+        form.fullName,
+        "borrow",
+        equipmentCode
+      );
+
         setSubmitFeedback('success');
         setTimeout(() => onBack(), 1500);
       } else {
