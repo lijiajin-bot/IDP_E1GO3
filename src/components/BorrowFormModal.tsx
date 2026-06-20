@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { ArrowLeft, Send, Image as ImageIcon, X } from 'lucide-react';
 import { useAppState } from '../context';
+import { sendSMS } from '../services/sms';
 
 interface BorrowFormProps {
   equipmentCode: string;
