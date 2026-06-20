@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { useAppState } from '../context';
 import type { UserRole } from '../auth';
-import { sendSMS } from '../services/sms';
 
 interface ApplicationStatusProps {
   userRole: UserRole;
@@ -238,18 +237,6 @@ export default function ApplicationStatus({
     }
 
     await submitReturnRequest(activeReturnAppId, returnForm);
-
-    const returnedApp = processedApplicationsLog.find(
-  (app) => app.id === activeReturnAppId
-);
-
-if (returnedApp) {
-  await sendSMS(
-    returnedApp.formData.fullName,
-    'return',
-    returnedApp.finalEquipmentCode || returnedApp.equipmentCode
-  );
-}
 
     setActiveReturnAppId(null);
     setReturnForm({
